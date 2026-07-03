@@ -9,6 +9,7 @@ import { DialogClose } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { APP_NAME } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 import type { CoursePickerCourse } from "@/lib/canvas-course-discovery-utils";
 
@@ -319,7 +320,7 @@ function getSuccessMessage(
   }
 
   return data.source === "cache"
-    ? `Showing ${formatCourseCount(courseCount)} saved in StudentHub.`
+    ? `Showing ${formatCourseCount(courseCount)} saved in ${APP_NAME}.`
     : `Fetched ${formatCourseCount(courseCount)} from Canvas.`;
 }
 

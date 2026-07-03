@@ -10,6 +10,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { APP_DESCRIPTION, APP_NAME } from "@/lib/branding";
 import { getCanvasCourseNavigation } from "@/lib/canvas-course-data";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -25,8 +26,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StudentHub",
-  description: "Canvas-backed course workspace for StudentHub.",
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
 };
 
 export default async function RootLayout({
@@ -61,7 +62,7 @@ export default async function RootLayout({
                 />
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-medium">
-                    StudentHub
+                    {APP_NAME}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
                     Dashboard

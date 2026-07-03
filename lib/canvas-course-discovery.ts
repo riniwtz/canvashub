@@ -3,6 +3,7 @@ import type { IncomingHttpHeaders } from "node:http";
 
 import { eq } from "drizzle-orm";
 
+import { APP_NAME } from "@/lib/branding";
 import { getDb } from "@/lib/db";
 import { canvasApiSyncState, canvasCourses } from "@/lib/db/schema";
 import type { NewCanvasCourse } from "@/lib/db/schema";
@@ -36,7 +37,7 @@ const CANCELLED_COURSE_REQUEST_ERROR = {
   publicMessage: "Course loading was cancelled.",
 } as const;
 const UNREADABLE_COURSE_RESPONSE_MESSAGE =
-  "Canvas sent course data StudentHub could not read. Try again later.";
+  `Canvas sent course data ${APP_NAME} could not read. Try again later.`;
 
 export const CANVAS_COURSE_HEADER_ENV_VARS = {
   accept: "CANVAS_COURSES_ACCEPT",
@@ -145,7 +146,7 @@ export async function getAvailableCanvasCoursesForPicker(options?: {
       status: 503,
       code: "missing_database_url",
       publicMessage:
-        "Course sync is unavailable because StudentHub is not connected to its database.",
+        `Course sync is unavailable because ${APP_NAME} is not connected to its database.`,
     });
   }
 
@@ -308,7 +309,7 @@ function requestCanvasCoursePage(
                 status: 502,
                 code: "canvas_course_request_error",
                 publicMessage:
-                  "StudentHub could not reach Canvas. Try again in a moment.",
+                  `${APP_NAME} could not reach Canvas. Try again in a moment.`,
               }),
         );
       });

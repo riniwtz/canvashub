@@ -3,6 +3,7 @@ import {
   CanvasCourseDiscoveryError,
   type CanvasCourseHeaders,
 } from "@/lib/canvas-course-discovery";
+import { APP_NAME } from "@/lib/branding";
 import {
   buildCanvasCoursesUrl,
   CANVAS_API_PAGE_SIZE,
@@ -128,7 +129,7 @@ async function readCanvasArray<TItem>(response: Response) {
       status: 502,
       code: "invalid_canvas_assignment_response",
       publicMessage:
-        "Canvas sent assignment data StudentHub could not read. Try again later.",
+        `Canvas sent assignment data ${APP_NAME} could not read. Try again later.`,
     });
   }
 

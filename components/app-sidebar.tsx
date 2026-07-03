@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { CourseCheckboxList } from "@/components/course-picker";
+import { APP_NAME } from "@/lib/branding";
 
 const mainNavigation = [
   {
@@ -87,7 +88,7 @@ export function AppSidebar({ courses = [], ...props }: AppSidebarProps) {
                   <GraduationCapIcon />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-bold">StudentHub</span>
+                  <span className="truncate font-bold">{APP_NAME}</span>
                   <span className="truncate text-xs">Course Workspace</span>
                 </div>
               </Link>
@@ -116,7 +117,7 @@ export function AppSidebar({ courses = [], ...props }: AppSidebarProps) {
                     <DialogHeader>
                       <DialogTitle>Fetch from Canvas</DialogTitle>
                       <DialogDescription>
-                        Sync your Canvas course data into StudentHub.
+                        Sync your Canvas course data into {APP_NAME}.
                       </DialogDescription>
                     </DialogHeader>
                     <CourseCheckboxList />
