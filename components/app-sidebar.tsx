@@ -1,0 +1,288 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  ArrowDownToLine,
+  BookOpenIcon,
+  ChevronRightIcon,
+  ContactRoundIcon,
+  GraduationCapIcon,
+  LayersIcon,
+  LayoutDashboardIcon,
+} from "lucide-react";
+
+import type { CanvasCourseNavigationItem } from "@/lib/canvas-course-data";
+import { cn } from "@/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+import { CourseCheckboxList } from "@/components/course-picker";
+
+const mainNavigation = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboardIcon,
+  },
+  {
+    title: "Contacts",
+    url: "/contacts",
+    icon: ContactRoundIcon,
+  },
+];
+const ACTIVE_COURSE_SECTION_BADGE_LIMIT = 4;
+
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  courses?: CanvasCourseNavigationItem[];
+};
+
+export function AppSidebar({ courses = [], ...props }: AppSidebarProps) {
+  const pathname = usePathname();
+  const isCourseRoute = pathname.startsWith("/courses/");
+  const activeCourse = courses.find((course) =>
+    isActiveCoursePath(pathname, course),
+  );
+
+  return (
+    <Sidebar collapsible="icon" variant="inset" {...props}>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/dashboard">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                  <GraduationCapIcon />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-bold">StudentHub</span>
+                  <span className="truncate text-xs">Course Workspace</span>
+                </div>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup className="pb-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <SidebarMenuButton
+                      type="button"
+                      variant="outline"
+                      tooltip="Fetch from Canvas"
+                    >
+                      <ArrowDownToLine />
+                      <span>Fetch from Canvas</span>
+                    </SidebarMenuButton>
+                  </DialogTrigger>
+
+                  <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Fetch from Canvas</DialogTitle>
+                      <DialogDescription>
+                        Sync your Canvas course data into StudentHub.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <CourseCheckboxList />
+                  </DialogContent>
+                </Dialog>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainNavigation.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url}
+                    tooltip={item.title}
+                  >
+                    <Link href={item.url}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+
+              <Collapsible asChild defaultOpen={isCourseRoute}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={isCourseRoute}
+                      tooltip="Courses"
+                    >
+                      <BookOpenIcon />
+                      <span>Courses</span>
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuAction className="data-[state=open]:rotate-90">
+                      <ChevronRightIcon />
+                      <span className="sr-only">Toggle courses</span>
+                    </SidebarMenuAction>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {courses.length ? (
+                        courses.map((course) => {
+                          const isActive =
+                            activeCourse?.canvasId === course.canvasId;
+                          const availableSections = course.sections.filter(
+                            (section) =>
+                              section.key !== "overview" && section.available,
+                          );
+
+                          return (
+                            <SidebarMenuSubItem key={course.canvasId}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={isActive}
+                                className="h-auto min-h-7 py-1.5"
+                              >
+                                <Link href={course.href}>
+                                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                    <span
+                                      className={cn(
+                                        "truncate",
+                                        isActive && "font-medium",
+                                      )}
+                                    >
+                                      {course.label}
+                                    </span>
+                                    {course.secondaryLabel ? (
+                                      <span className="truncate text-xs text-muted-foreground">
+                                        {course.secondaryLabel}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                              <SidebarMenuBadge>
+                                {course.availableSectionCount}
+                              </SidebarMenuBadge>
+                              {isActive ? (
+                                <div className="flex flex-wrap gap-1 px-2 pb-1">
+                                  {availableSections.length ? (
+                                    availableSections
+                                      .slice(
+                                        0,
+                                        ACTIVE_COURSE_SECTION_BADGE_LIMIT,
+                                      )
+                                      .map((section) => (
+                                        <Badge
+                                          key={section.key}
+                                          variant="outline"
+                                          className="h-5 px-1.5 text-[10px]"
+                                        >
+                                          {section.label}
+                                        </Badge>
+                                      ))
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">
+                                      No cached item groups
+                                    </span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </SidebarMenuSubItem>
+                          );
+                        })
+                      ) : (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            aria-disabled="true"
+                            className="h-auto min-h-14 cursor-default py-2"
+                          >
+                            <LayersIcon />
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                              <span className="truncate">
+                                No cached courses
+                              </span>
+                              <span className="truncate text-xs text-muted-foreground">
+                                Click to fetch from Canvas
+                              </span>
+                            </span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarSeparator />
+      </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild size="sm">
+              <Link href="/dashboard">
+                <GraduationCapIcon />
+                <span>Active Term</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+function isActiveCoursePath(
+  pathname: string,
+  course: CanvasCourseNavigationItem,
+) {
+  if (pathname === course.href) {
+    return true;
+  }
+
+  try {
+    return decodeURIComponent(pathname) === `/courses/${course.canvasId}`;
+  } catch {
+    return false;
+  }
+}
