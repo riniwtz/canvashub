@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { connection } from "next/server";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -9,9 +10,10 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar } from "@/features/app-shell/components/app-sidebar";
+import { AppHeader } from "@/features/app-shell/components/app-header";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/branding";
-import { getCanvasCourseNavigation } from "@/lib/canvas-course-data";
+import { getCanvasCourseNavigation } from "@/features/courses/server/course-data";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -35,6 +37,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   const sidebarCourses = await getCanvasCourseNavigation();
 
   return (
@@ -53,21 +56,14 @@ export default async function RootLayout({
         <TooltipProvider>
           <SidebarProvider>
             <AppSidebar courses={sidebarCourses} />
-            <SidebarInset>
+            <SidebarInset className="min-w-0">
               <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator
                   orientation="vertical"
                   className="mr-2 data-vertical:h-4 data-vertical:self-auto"
                 />
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-medium">
-                    {APP_NAME}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    Dashboard
-                  </span>
-                </div>
+                <AppHeader />
               </header>
               <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
             </SidebarInset>

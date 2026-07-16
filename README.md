@@ -16,9 +16,43 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Route entry points live in `app/`, while feature implementations live in `features/`.
+
+## Project Structure
+
+```text
+app/                  Next.js pages, layouts, route handlers, and route boundaries
+components/ui/        Shared shadcn UI primitives
+features/
+  accounts/           Tracked-account UI, validation, actions, and data access
+  app-shell/          Global navigation and application chrome
+  contacts/           Contact UI, queries, validation, actions, and data access
+  courses/            Canvas course UI, synchronization, and API handlers
+  dashboard/          Dashboard and home views
+  work/               Work-management UI, queries, validation, actions, and data access
+lib/                  Cross-feature infrastructure such as database, branding, and formatting
+```
+
+Keep `app/` modules thin and import feature implementations directly. Inside a
+feature, place UI in `components/`, server-only actions and data access in
+`server/`, and keep domain schemas, types, utilities, and tests at the feature
+root. Shared UI primitives stay in `components/ui/`.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Local PostgreSQL
+
+The Docker service uses PostgreSQL 18, the `studenthub` database, and host port `5433` by default so it can coexist with a native PostgreSQL server on port `5432`.
+
+```bash
+cp .env.example .env
+npm run db:up
+npm run db:migrate
+```
+
+Use `npm run db:down` to stop the service. The database persists in the `studenthub-postgres-data` Docker volume. Override `POSTGRES_PORT`, credentials, and `DATABASE_URL` together when changing the local connection.
+
+Run `db:migrate` only against a fresh database whose schema is managed by the committed Drizzle migrations. Existing databases created with `db:push` may contain tables without migration-ledger entries; do not mix the workflows until that database has been deliberately baselined. Generate a migration with `npm run db:generate -- --name=<change_name>` before migrating schema changes.
 
 ## Learn More
 

@@ -3,15 +3,23 @@ import { relations } from "drizzle-orm/_relations";
 import {
   bigint,
   boolean,
+  bytea,
+  check,
+  date,
   index,
   integer,
   jsonb,
+  pgEnum,
   pgTable,
   real,
+  smallint,
   text,
+  time,
   timestamp,
   uniqueIndex,
   uuid,
+  varchar,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -28,13 +36,17 @@ type JsonArray<T = unknown> = T[];
 
 const rawJson = () => jsonb("raw").$type<CanvasRaw>().notNull().default(sql`'{}'::jsonb`);
 
-const lifecycleColumns = () => ({
-  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+const recordLifecycleColumns = () => ({
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull()
     .$onUpdate(() => new Date()),
+});
+
+const lifecycleColumns = () => ({
+  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+  ...recordLifecycleColumns(),
 });
 
 export const canvasUsers = pgTable(
@@ -564,6 +576,568 @@ export const canvasApiSyncRuns = pgTable(
   ],
 );
 
+export const contactSocialPlatform = pgEnum("contact_social_platform", [
+  "facebook",
+  "instagram",
+  "x",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "github",
+  "website",
+]);
+
+export const trackedAccountStatus = pgEnum("tracked_account_status", [
+  "active",
+  "paused",
+  "archived",
+  "inactive",
+]);
+
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    nickname: varchar("nickname", { length: 80 }),
+    age: smallint("age"),
+    birthday: date("birthday", { mode: "string" }),
+    phone: varchar("phone", { length: 32 }),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    check(
+      "contacts_name_length_check",
+      sql`char_length(btrim(${table.name})) between 1 and 120`,
+    ),
+    check(
+      "contacts_nickname_length_check",
+      sql`${table.nickname} is null or char_length(btrim(${table.nickname})) between 1 and 80`,
+    ),
+    check("contacts_age_check", sql`${table.age} is null or ${table.age} between 0 and 150`),
+    check(
+      "contacts_phone_length_check",
+      sql`${table.phone} is null or char_length(btrim(${table.phone})) between 1 and 32`,
+    ),
+    index("contacts_name_idx").on(table.name),
+    index("contacts_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const contactSocialLinks = pgTable(
+  "contact_social_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    platform: contactSocialPlatform("platform").notNull(),
+    url: varchar("url", { length: 2048 }).notNull(),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    check("contact_social_links_url_protocol_check", sql`${table.url} ~* '^https?://'`),
+    index("contact_social_links_contact_id_idx").on(table.contactId),
+    uniqueIndex("contact_social_links_contact_platform_url_uq").on(
+      table.contactId,
+      table.platform,
+      table.url,
+    ),
+  ],
+);
+
+export const trackedAccounts = pgTable(
+  "tracked_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountName: varchar("account_name", { length: 100 }).notNull(),
+    email: varchar("email", { length: 254 }).notNull(),
+    passwordCiphertext: bytea("password_ciphertext").notNull(),
+    passwordSalt: bytea("password_salt").notNull(),
+    passwordIv: bytea("password_iv").notNull(),
+    passwordAuthTag: bytea("password_auth_tag").notNull(),
+    encryptionVersion: smallint("encryption_version").default(1).notNull(),
+    encryptionAlgorithm: varchar("encryption_algorithm", { length: 32 })
+      .default("aes-256-gcm")
+      .notNull(),
+    keyDerivationAlgorithm: varchar("key_derivation_algorithm", { length: 32 })
+      .default("argon2id")
+      .notNull(),
+    argon2MemoryCost: integer("argon2_memory_cost").notNull(),
+    argon2TimeCost: integer("argon2_time_cost").notNull(),
+    argon2Parallelism: smallint("argon2_parallelism").notNull(),
+    notes: text("notes"),
+    accountByContactId: uuid("account_by_contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
+    status: trackedAccountStatus("status").default("active").notNull(),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    check(
+      "tracked_accounts_name_length_check",
+      sql`char_length(btrim(${table.accountName})) between 2 and 100`,
+    ),
+    check(
+      "tracked_accounts_email_length_check",
+      sql`char_length(btrim(${table.email})) between 3 and 254`,
+    ),
+    check(
+      "tracked_accounts_password_ciphertext_check",
+      sql`octet_length(${table.passwordCiphertext}) > 0`,
+    ),
+    check(
+      "tracked_accounts_password_salt_check",
+      sql`octet_length(${table.passwordSalt}) = 16`,
+    ),
+    check("tracked_accounts_password_iv_check", sql`octet_length(${table.passwordIv}) = 12`),
+    check(
+      "tracked_accounts_password_auth_tag_check",
+      sql`octet_length(${table.passwordAuthTag}) = 16`,
+    ),
+    check("tracked_accounts_encryption_version_check", sql`${table.encryptionVersion} > 0`),
+    check(
+      "tracked_accounts_encryption_algorithm_check",
+      sql`char_length(btrim(${table.encryptionAlgorithm})) > 0`,
+    ),
+    check(
+      "tracked_accounts_key_derivation_algorithm_check",
+      sql`char_length(btrim(${table.keyDerivationAlgorithm})) > 0`,
+    ),
+    check("tracked_accounts_argon2_memory_cost_check", sql`${table.argon2MemoryCost} > 0`),
+    check("tracked_accounts_argon2_time_cost_check", sql`${table.argon2TimeCost} > 0`),
+    check("tracked_accounts_argon2_parallelism_check", sql`${table.argon2Parallelism} > 0`),
+    check(
+      "tracked_accounts_notes_length_check",
+      sql`${table.notes} is null or char_length(btrim(${table.notes})) between 3 and 2000`,
+    ),
+    index("tracked_accounts_email_idx").on(table.email),
+    index("tracked_accounts_account_by_contact_id_idx").on(table.accountByContactId),
+    index("tracked_accounts_status_idx").on(table.status),
+    index("tracked_accounts_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const taskPriority = pgEnum("task_priority", [
+  "low",
+  "medium",
+  "high",
+  "urgent",
+]);
+
+export const taskWorkCategory = pgEnum("task_work_category", [
+  "academic",
+  "organization",
+  "personal",
+  "development",
+  "general",
+]);
+
+export const workUsers = pgTable(
+  "work_users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    email: varchar("email", { length: 254 }).notNull(),
+    timezone: varchar("timezone", { length: 64 })
+      .default("Asia/Manila")
+      .notNull(),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    uniqueIndex("work_users_email_uq").on(table.email),
+    check(
+      "work_users_name_length_check",
+      sql`char_length(btrim(${table.name})) between 1 and 120`,
+    ),
+  ],
+);
+
+export const taskTypes = pgTable(
+  "task_types",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    normalizedName: varchar("normalized_name", { length: 80 }).notNull(),
+    slug: varchar("slug", { length: 96 }).notNull(),
+    description: varchar("description", { length: 240 }),
+    color: varchar("color", { length: 7 }).default("#737373").notNull(),
+    icon: varchar("icon", { length: 40 }).default("briefcase").notNull(),
+    isSystem: boolean("is_system").default(false).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    uniqueIndex("task_types_owner_normalized_name_uq").on(
+      table.ownerUserId,
+      table.normalizedName,
+    ),
+    uniqueIndex("task_types_owner_slug_uq").on(table.ownerUserId, table.slug),
+    index("task_types_owner_active_sort_idx").on(
+      table.ownerUserId,
+      table.isActive,
+      table.sortOrder,
+    ),
+    check(
+      "task_types_name_length_check",
+      sql`char_length(btrim(${table.name})) between 1 and 80`,
+    ),
+    check("task_types_color_check", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
+  ],
+);
+
+export const taskStatuses = pgTable(
+  "task_statuses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 60 }).notNull(),
+    slug: varchar("slug", { length: 72 }).notNull(),
+    color: varchar("color", { length: 7 }).default("#737373").notNull(),
+    isCompleted: boolean("is_completed").default(false).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    uniqueIndex("task_statuses_owner_slug_uq").on(table.ownerUserId, table.slug),
+    index("task_statuses_owner_active_sort_idx").on(
+      table.ownerUserId,
+      table.isActive,
+      table.sortOrder,
+    ),
+    check(
+      "task_statuses_name_length_check",
+      sql`char_length(btrim(${table.name})) between 1 and 60`,
+    ),
+    check("task_statuses_color_check", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
+  ],
+);
+
+export const workOrganizations = pgTable(
+  "work_organizations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    normalizedName: varchar("normalized_name", { length: 120 }).notNull(),
+    description: varchar("description", { length: 240 }),
+    isActive: boolean("is_active").default(true).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    uniqueIndex("work_organizations_owner_normalized_name_uq").on(
+      table.ownerUserId,
+      table.normalizedName,
+    ),
+    index("work_organizations_owner_active_name_idx").on(
+      table.ownerUserId,
+      table.isActive,
+      table.name,
+    ),
+    check(
+      "work_organizations_name_length_check",
+      sql`char_length(btrim(${table.name})) between 1 and 120`,
+    ),
+  ],
+);
+
+export const workTags = pgTable(
+  "work_tags",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 40 }).notNull(),
+    normalizedName: varchar("normalized_name", { length: 40 }).notNull(),
+    slug: varchar("slug", { length: 48 }).notNull(),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    uniqueIndex("work_tags_owner_normalized_name_uq").on(
+      table.ownerUserId,
+      table.normalizedName,
+    ),
+    uniqueIndex("work_tags_owner_slug_uq").on(table.ownerUserId, table.slug),
+    index("work_tags_owner_name_idx").on(table.ownerUserId, table.name),
+  ],
+);
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "cascade" }),
+    parentTaskId: uuid("parent_task_id").references(
+      (): AnyPgColumn => tasks.id,
+      { onDelete: "set null" },
+    ),
+    taskTypeId: uuid("task_type_id")
+      .notNull()
+      .references(() => taskTypes.id, { onDelete: "restrict" }),
+    statusId: uuid("status_id")
+      .notNull()
+      .references(() => taskStatuses.id, { onDelete: "restrict" }),
+    courseId: uuid("course_id").references(() => canvasCourses.id, {
+      onDelete: "set null",
+    }),
+    organizationId: uuid("organization_id").references(
+      () => workOrganizations.id,
+      { onDelete: "set null" },
+    ),
+    title: varchar("title", { length: 160 }).notNull(),
+    description: text("description"),
+    notes: text("notes"),
+    priority: taskPriority("priority").default("medium").notNull(),
+    workCategory: taskWorkCategory("work_category").default("general").notNull(),
+    startDate: date("start_date", { mode: "string" }),
+    dueDate: date("due_date", { mode: "string" }),
+    dueTime: time("due_time", { precision: 0 }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    timezone: varchar("timezone", { length: 64 }).default("Asia/Manila").notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    requestKey: uuid("request_key"),
+    version: integer("version").default(1).notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "restrict" }),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "restrict" }),
+    ...recordLifecycleColumns(),
+  },
+  (table) => [
+    index("tasks_owner_deleted_updated_idx").on(
+      table.ownerUserId,
+      table.deletedAt,
+      table.updatedAt,
+    ),
+    index("tasks_owner_parent_deleted_idx").on(
+      table.ownerUserId,
+      table.parentTaskId,
+      table.deletedAt,
+    ),
+    index("tasks_owner_type_idx").on(table.ownerUserId, table.taskTypeId),
+    index("tasks_owner_status_idx").on(table.ownerUserId, table.statusId),
+    index("tasks_owner_due_date_idx").on(table.ownerUserId, table.dueDate),
+    index("tasks_course_id_idx").on(table.courseId),
+    index("tasks_organization_id_idx").on(table.organizationId),
+    uniqueIndex("tasks_owner_request_key_uq").on(
+      table.ownerUserId,
+      table.requestKey,
+    ),
+    check(
+      "tasks_title_length_check",
+      sql`char_length(btrim(${table.title})) between 1 and 160`,
+    ),
+    check(
+      "tasks_description_length_check",
+      sql`${table.description} is null or char_length(${table.description}) <= 5000`,
+    ),
+    check(
+      "tasks_notes_length_check",
+      sql`${table.notes} is null or char_length(${table.notes}) <= 5000`,
+    ),
+    check(
+      "tasks_parent_not_self_check",
+      sql`${table.parentTaskId} is null or ${table.parentTaskId} <> ${table.id}`,
+    ),
+    check(
+      "tasks_due_time_requires_date_check",
+      sql`${table.dueTime} is null or ${table.dueDate} is not null`,
+    ),
+    check(
+      "tasks_context_compatibility_check",
+      sql`(${table.courseId} is null or ${table.workCategory} = 'academic')
+        and (${table.organizationId} is null or ${table.workCategory} = 'organization')
+        and not (${table.courseId} is not null and ${table.organizationId} is not null)`,
+    ),
+    check("tasks_version_check", sql`${table.version} > 0`),
+  ],
+);
+
+export const taskTags = pgTable(
+  "task_tags",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => workTags.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("task_tags_task_tag_uq").on(table.taskId, table.tagId),
+    index("task_tags_tag_id_idx").on(table.tagId),
+  ],
+);
+
+export const taskActivityLogs = pgTable(
+  "task_activity_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    actorUserId: uuid("actor_user_id")
+      .notNull()
+      .references(() => workUsers.id, { onDelete: "restrict" }),
+    action: varchar("action", { length: 40 }).notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("task_activity_logs_owner_task_created_idx").on(
+      table.ownerUserId,
+      table.taskId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const contactsRelations = relations(contacts, ({ many }) => ({
+  socialLinks: many(contactSocialLinks),
+  trackedAccounts: many(trackedAccounts),
+}));
+
+export const contactSocialLinksRelations = relations(contactSocialLinks, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [contactSocialLinks.contactId],
+    references: [contacts.id],
+  }),
+}));
+
+export const trackedAccountsRelations = relations(trackedAccounts, ({ one }) => ({
+  accountByContact: one(contacts, {
+    fields: [trackedAccounts.accountByContactId],
+    references: [contacts.id],
+  }),
+}));
+
+export const workUsersRelations = relations(workUsers, ({ many }) => ({
+  taskTypes: many(taskTypes),
+  taskStatuses: many(taskStatuses),
+  organizations: many(workOrganizations),
+  tags: many(workTags),
+  tasks: many(tasks),
+  taskActivityLogs: many(taskActivityLogs),
+}));
+
+export const taskTypesRelations = relations(taskTypes, ({ one, many }) => ({
+  owner: one(workUsers, {
+    fields: [taskTypes.ownerUserId],
+    references: [workUsers.id],
+  }),
+  tasks: many(tasks),
+}));
+
+export const taskStatusesRelations = relations(taskStatuses, ({ one, many }) => ({
+  owner: one(workUsers, {
+    fields: [taskStatuses.ownerUserId],
+    references: [workUsers.id],
+  }),
+  tasks: many(tasks),
+}));
+
+export const workOrganizationsRelations = relations(
+  workOrganizations,
+  ({ one, many }) => ({
+    owner: one(workUsers, {
+      fields: [workOrganizations.ownerUserId],
+      references: [workUsers.id],
+    }),
+    tasks: many(tasks),
+  }),
+);
+
+export const workTagsRelations = relations(workTags, ({ one, many }) => ({
+  owner: one(workUsers, {
+    fields: [workTags.ownerUserId],
+    references: [workUsers.id],
+  }),
+  taskTags: many(taskTags),
+}));
+
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  owner: one(workUsers, {
+    fields: [tasks.ownerUserId],
+    references: [workUsers.id],
+  }),
+  parent: one(tasks, {
+    fields: [tasks.parentTaskId],
+    references: [tasks.id],
+    relationName: "taskHierarchy",
+  }),
+  subtasks: many(tasks, { relationName: "taskHierarchy" }),
+  taskType: one(taskTypes, {
+    fields: [tasks.taskTypeId],
+    references: [taskTypes.id],
+  }),
+  status: one(taskStatuses, {
+    fields: [tasks.statusId],
+    references: [taskStatuses.id],
+  }),
+  course: one(canvasCourses, {
+    fields: [tasks.courseId],
+    references: [canvasCourses.id],
+  }),
+  organization: one(workOrganizations, {
+    fields: [tasks.organizationId],
+    references: [workOrganizations.id],
+  }),
+  tags: many(taskTags),
+  activityLogs: many(taskActivityLogs),
+}));
+
+export const taskTagsRelations = relations(taskTags, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskTags.taskId],
+    references: [tasks.id],
+  }),
+  tag: one(workTags, {
+    fields: [taskTags.tagId],
+    references: [workTags.id],
+  }),
+}));
+
+export const taskActivityLogsRelations = relations(
+  taskActivityLogs,
+  ({ one }) => ({
+    owner: one(workUsers, {
+      fields: [taskActivityLogs.ownerUserId],
+      references: [workUsers.id],
+    }),
+    task: one(tasks, {
+      fields: [taskActivityLogs.taskId],
+      references: [tasks.id],
+    }),
+    actor: one(workUsers, {
+      fields: [taskActivityLogs.actorUserId],
+      references: [workUsers.id],
+    }),
+  }),
+);
+
 export const canvasCoursesRelations = relations(canvasCourses, ({ many }) => ({
   nicknames: many(canvasCourseNicknames),
   enrollments: many(canvasEnrollments),
@@ -705,6 +1279,37 @@ export const canvasTodoItemsRelations = relations(canvasTodoItems, ({ one }) => 
     references: [canvasAssignments.id],
   }),
 }));
+
+export type ContactSocialPlatform = (typeof contactSocialPlatform.enumValues)[number];
+export type TrackedAccountStatus = (typeof trackedAccountStatus.enumValues)[number];
+export type TaskPriority = (typeof taskPriority.enumValues)[number];
+export type TaskWorkCategory = (typeof taskWorkCategory.enumValues)[number];
+
+export type Contact = typeof contacts.$inferSelect;
+export type NewContact = typeof contacts.$inferInsert;
+
+export type ContactSocialLink = typeof contactSocialLinks.$inferSelect;
+export type NewContactSocialLink = typeof contactSocialLinks.$inferInsert;
+
+export type TrackedAccount = typeof trackedAccounts.$inferSelect;
+export type NewTrackedAccount = typeof trackedAccounts.$inferInsert;
+
+export type WorkUser = typeof workUsers.$inferSelect;
+export type NewWorkUser = typeof workUsers.$inferInsert;
+export type TaskType = typeof taskTypes.$inferSelect;
+export type NewTaskType = typeof taskTypes.$inferInsert;
+export type TaskStatus = typeof taskStatuses.$inferSelect;
+export type NewTaskStatus = typeof taskStatuses.$inferInsert;
+export type WorkOrganization = typeof workOrganizations.$inferSelect;
+export type NewWorkOrganization = typeof workOrganizations.$inferInsert;
+export type WorkTag = typeof workTags.$inferSelect;
+export type NewWorkTag = typeof workTags.$inferInsert;
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+export type TaskTag = typeof taskTags.$inferSelect;
+export type NewTaskTag = typeof taskTags.$inferInsert;
+export type TaskActivityLog = typeof taskActivityLogs.$inferSelect;
+export type NewTaskActivityLog = typeof taskActivityLogs.$inferInsert;
 
 export type CanvasUser = typeof canvasUsers.$inferSelect;
 export type NewCanvasUser = typeof canvasUsers.$inferInsert;
